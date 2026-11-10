@@ -223,14 +223,31 @@ def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError("Не задан секрет TELEGRAM_BOT_TOKEN. Добавьте его в переменные окружения хостинга.")
+
+    # Cloud Run sends Telegram webhook requests to this HTTP listener.
+    # Set WEBHOOK_URL after the first deployment, using the service URL shown by Cloud Run.
+    webhook_url = os.environ.get("WEBHOOK_URL", "").strip()
+    secret_token = os.environ.get("WEBHOOK_SECRET", "").strip()
+    if not secret_token:
+        raise RuntimeError("Не задан WEBHOOK_SECRET. Создайте секрет из букв и цифр (без пробелов).")
+
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(CallbackQueryHandler(choose_spread, pattern=r"^spread:"))
     app.add_handler(CallbackQueryHandler(pick_card, pattern=r"^pick:"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_question))
-    log.info("PerfectTarologBot is starting")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    port = int(os.environ.get("PORT", "8080"))
+    log.info("PerfectTarologBot is starting in webhook mode on port %s", port)
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path="telegram",
+        webhook_url=webhook_url or None,
+        secret_token=secret_token,
+        allowed_updates=Update.ALL_TYPES,
+    )
 
 if __name__ == "__main__":
     main()
