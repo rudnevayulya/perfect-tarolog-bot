@@ -1,7 +1,6 @@
 import logging
 import os
 import random
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from dataclasses import dataclass, field
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -223,30 +222,9 @@ async def pick_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
-        raise RuntimeError("Не задан секрет TELEGRAM_BOT_TOKEN. Добавьте его в переменные окружения хостинга.")
-
-    # Cloud Run sends Telegram webhook requests to this HTTP listener.
-    # First deployment: omit WEBHOOK_URL so Cloud Run can create the service URL.
-    webhook_url = os.environ.get("WEBHOOK_URL", "").strip()
-    secret_token = os.environ.get("WEBHOOK_SECRET", "").strip()
-    port = int(os.environ.get("PORT", "8080"))
-
-    if not webhook_url:
-        class BootstrapHandler(BaseHTTPRequestHandler):
-            def do_GET(self):
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"Perfect Tarolog Bot setup is waiting for WEBHOOK_URL.")
-
-            def log_message(self, format, *args):
-                log.info("Bootstrap HTTP: " + format, *args)
-
-        log.info("WEBHOOK_URL is not set; running bootstrap HTTP server on port %s", port)
-        HTTPServer(("0.0.0.0", port), BootstrapHandler).serve_forever()
-        return
-
-    if not secret_token:
-        raise RuntimeError("Не задан WEBHOOK_SECRET. Создайте секрет из букв и цифр (без пробелов).")
+        raise RuntimeError(
+            "Не задан TELEGRAM_BOT_TOKEN. Введите токен локально в терминале iSH."
+        )
 
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
@@ -255,15 +233,8 @@ def main():
     app.add_handler(CallbackQueryHandler(pick_card, pattern=r"^pick:"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_question))
 
-    log.info("PerfectTarologBot is starting in webhook mode on port %s", port)
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path="telegram",
-        webhook_url=webhook_url or None,
-        secret_token=secret_token,
-        allowed_updates=Update.ALL_TYPES,
-    )
+    log.info("PerfectTarologBot запущен в режиме polling. Не закрывайте iSH.")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
